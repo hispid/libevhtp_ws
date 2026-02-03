@@ -145,9 +145,9 @@ evhtp_ws_parser_run(evhtp_request_t *req, evhtp_ws_hooks * hooks,
 
                 //sanity check 1
                 if(
-                    p->frame.hdr.fin != OP_CONT && p->frame.hdr.fin != OP_TEXT &&
-                    p->frame.hdr.fin != OP_BIN  && p->frame.hdr.fin != OP_PING &&
-                    p->frame.hdr.fin != OP_PONG && p->frame.hdr.fin != OP_CLOSE
+                    p->frame.hdr.opcode != OP_CONT && p->frame.hdr.opcode != OP_TEXT &&
+                    p->frame.hdr.opcode != OP_BIN  && p->frame.hdr.opcode != OP_PING &&
+                    p->frame.hdr.opcode != OP_PONG && p->frame.hdr.opcode != OP_CLOSE
                 )
                 {
                     fprintf(stderr,"Warning: websockets - invalid opcode %d\n", p->frame.hdr.opcode);
@@ -323,8 +323,11 @@ evhtp_ws_parser_run(evhtp_request_t *req, evhtp_ws_hooks * hooks,
                     p->content_len -= to_read;
                     i += to_read;
                 }
-                else if (p->frame.hdr.opcode == OP_CONT) //0 size on a cont frame -- something isn't right.
-                    return -1;
+                else if (p->content_len > 0) {
+                    // Expected payload but no data available in buffer - wait for more data
+                    return i;
+                }
+                // If to_read == 0 and content_len == 0, frame is complete, continue to fini
 
                 fini:
         
@@ -474,6 +477,60 @@ evhtp_ws_parser_get_userdata(evhtp_ws_parser * p) {
 
     return p->usrdata;
 }
+/* send a text message to websocket client */
+EVHTP_EXPORT int evhtp_ws_send_text(evhtp_request_t * req, const char * data, size_t len)
+{
+    struct evbuffer * buf;
+
+    if (!req || !data) {
+        return -1;
+    }
+
+    buf = evbuffer_new();
+    if (!buf) {
+        return -1;
+    }
+
+    evbuffer_add(buf, data, len);
+    
+    if (!evhtp_ws_add_header(buf, OP_TEXT)) {
+        evbuffer_free(buf);
+        return -1;
+    }
+
+    evhtp_send_reply_body(req, buf);
+    evbuffer_free(buf);
+
+    return 0;
+}
+
+/* send a binary message to websocket client */
+EVHTP_EXPORT int evhtp_ws_send_binary(evhtp_request_t * req, const void * data, size_t len)
+{
+    struct evbuffer * buf;
+
+    if (!req || !data) {
+        return -1;
+    }
+
+    buf = evbuffer_new();
+    if (!buf) {
+        return -1;
+    }
+
+    evbuffer_add(buf, data, len);
+    
+    if (!evhtp_ws_add_header(buf, OP_BIN)) {
+        evbuffer_free(buf);
+        return -1;
+    }
+
+    evhtp_send_reply_body(req, buf);
+    evbuffer_free(buf);
+
+    return 0;
+}
+
 /* set a flag to disconnect after we are done parsing */
 void evhtp_ws_disconnect(evhtp_request_t  * req)
 {
