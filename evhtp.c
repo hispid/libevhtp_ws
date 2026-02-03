@@ -42,7 +42,9 @@
 
 //#include "regint.h" /* def for oniguruma regex_t (aka 're_pattern_buffer')*/
 //#include "oniguruma.h"
+#ifndef EVHTP_DISABLE_REGEX
 #include <oniguruma.h>
+#endif
 
 #include "ws/evhtp_ws.h"
 
