@@ -283,6 +283,13 @@ install(
 )
 
 # Headers:
+#   * ws/evhtp_ws.h -> <prefix>/include/evhtp/ws/evhtp_ws.h
+install(
+    FILES "ws/evhtp_ws.h"
+    DESTINATION "${include_install_dir}/evhtp/ws"
+)
+
+# Headers:
 #   * compat/sys/tree.h -> <prefix>/include/evhtp/sys/tree.h
 install(
     FILES ${compat_headers}

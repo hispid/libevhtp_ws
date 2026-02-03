@@ -48,9 +48,6 @@ struct evhtp_ws_frame_s {
     uint64_t payload_len;
 };
 
-typedef enum evhtp_ws_parser_state evhtp_ws_parser_state;
-typedef struct evhtp_ws_frame_s     evhtp_ws_frame;
-
 enum evhtp_ws_parser_state {
     ws_s_start = 0,
     ws_s_fin_rsv_opcode,
@@ -60,6 +57,9 @@ enum evhtp_ws_parser_state {
     ws_s_masking_key,
     ws_s_payload
 };
+
+typedef enum evhtp_ws_parser_state evhtp_ws_parser_state;
+typedef struct evhtp_ws_frame_s     evhtp_ws_frame;
 
 struct evhtp_ws_parser_s {
     evhtp_ws_parser_state state;

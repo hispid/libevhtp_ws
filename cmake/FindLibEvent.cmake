@@ -6,7 +6,7 @@
 # LIBEVENT_LIBRARIES 0 The libraries needed to use LibEvent
 
 find_path     (LIBEVENT_INCLUDE_DIR NAMES event.h)
-find_library  (LIBEVENT_LIBRARY     NAMES event)
+#find_library  (LIBEVENT_LIBRARY     NAMES event)
 find_library  (LIBEVENT_CORE        NAMES event_core)
 find_library  (LIBEVENT_EXTRA       NAMES event_extra)
 

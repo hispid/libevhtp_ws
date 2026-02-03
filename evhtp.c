@@ -55,6 +55,7 @@ uint32_t wsct=0;
 #ifdef EVHTP_VALGRIND_FORK_SAFE
 /* for the connection list */
 pthread_mutex_t contqlock;
+TAILQ_HEAD(connhead_s, evhtp_connection) conn_head; //-ajf connection tracker
 #endif
 /**
  * @brief structure containing a single callback and configuration
