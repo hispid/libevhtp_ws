@@ -1507,29 +1507,6 @@ EVHTP_EXPORT unsigned int evhtp_request_status(evhtp_request_t *);
         (_var) = NULL;                      \
 }  while (0)
 
-/**
- * @brief disconnect from websocket client
- */
-void evhtp_ws_disconnect(evhtp_request_t  * req);
-void evhtp_ws_do_disconnect(evhtp_request_t  * req);
-
-/**
- * @brief send a text message to websocket client
- * @param req websocket request
- * @param data text data to send
- * @param len length of data
- * @return 0 on success, -1 on error
- */
-EVHTP_EXPORT int evhtp_ws_send_text(evhtp_request_t * req, const char * data, size_t len);
-
-/**
- * @brief send a binary message to websocket client
- * @param req websocket request
- * @param data binary data to send
- * @param len length of data
- * @return 0 on success, -1 on error
- */
-EVHTP_EXPORT int evhtp_ws_send_binary(evhtp_request_t * req, const void * data, size_t len);
 
 #ifdef __cplusplus
 }

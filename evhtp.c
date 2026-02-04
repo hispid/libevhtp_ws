@@ -48,6 +48,9 @@
 
 #include "ws/evhtp_ws.h"
 
+/* Forward declaration for internal websocket function */
+void evhtp_ws_do_disconnect(evhtp_request_t * req);
+
 /* for making an id for websockets */
 pthread_mutex_t wsctlock;
 uint32_t wsct=0;

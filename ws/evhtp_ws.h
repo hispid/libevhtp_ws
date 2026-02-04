@@ -1,6 +1,12 @@
 #ifndef __EVHTP_WS_H__
 #define __EVHTP_WS_H__
 
+/* Forward declarations - include evhtp.h for full definitions */
+struct evhtp_request;
+typedef struct evhtp_request evhtp_request_t;
+struct evhtp_kvs;
+typedef struct evhtp_kvs evhtp_kvs_t;
+
 /**
  * @brief attempt to find the sec-webSocket-key from the input headers,
  *       append the magic string to it, sha1 encode it, then base64 encode
@@ -96,6 +102,12 @@ EVHTP_EXPORT void              evhtp_ws_parser_set_userdata(evhtp_ws_parser * p,
 EVHTP_EXPORT void            * evhtp_ws_parser_get_userdata(evhtp_ws_parser * p);
 
 EVHTP_EXPORT struct evbuffer * evhtp_ws_add_header(struct evbuffer *buf, uint8_t opcode);
+
+/**
+ * @brief disconnect from websocket client
+ * @param req websocket request
+ */
+EVHTP_EXPORT void evhtp_ws_disconnect(evhtp_request_t * req);
 
 /**
  * @brief send a text message to websocket client
