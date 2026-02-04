@@ -1,3 +1,10 @@
+v1.2.19
+ o Fix optional regex support by conditionally including oniguruma.h based on EVHTP_DISABLE_REGEX flag
+ o Fix websocket support: install header, define connection tracker
+ o Add websocket message sending functions (evhtp_ws_send_text, evhtp_ws_send_binary) and improve opcode checks
+ o Update FindOniguruma.cmake to use consistent package naming convention
+ o Fix websocket parser to handle continuation frames correctly
+
 v1.2.18
  o Add htp__evbuffer_add_iovec_ helper for libevent < 2.1 (8991567 Nathan French)
  o [#122] Fix compilation without deprecated OpenSSL 1.1 APIs (78e8e41 Rosen Penev)
