@@ -2867,8 +2867,28 @@ htp__connection_eventcb_(struct bufferevent * bev, short events, void * arg)
         }
 
     }
-    if (c->request && c->request->cb_has_websock)
-    {
+    
+    /* websockets: handle connection close/error events and cleanup */
+    if (c->request && c->request->cb_has_websock) {
+        /* Handle connection close/error events */
+        if ((events & (BEV_EVENT_EOF | BEV_EVENT_ERROR)) && 
+            !c->request->disconnect) {
+            
+            /* Set disconnect flag */
+            c->request->disconnect = 1;
+            
+            /* If this is an error, set error flag */
+            if (events & BEV_EVENT_ERROR) {
+                HTP_FLAG_ON(c->request, EVHTP_REQ_FLAG_ERROR);
+            }
+            
+            /* Call WebSocket callback to handle close/error */
+            if (c->request->cb) {
+                (c->request->cb)(c->request, c->request->cbarg);
+            }
+        }
+        
+        /* Cleanup WebSocket parser */
         evhtp_ws_parser * p = c->request->ws_parser;
         if(p)
         {
