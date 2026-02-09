@@ -2999,12 +2999,21 @@ htp__connection_accept_(struct event_base * evbase, evhtp_connection_t * connect
 {
     struct timeval * c_recv_timeo;
     struct timeval * c_send_timeo;
+    int bev_flags;
 
     if (htp__run_pre_accept_(connection->htp, connection) < 0) {
         evutil_closesocket(connection->sock);
 
         return -1;
     }
+
+    /* If threads are used, ensure BEV_OPT_THREADSAFE is set */
+    bev_flags = connection->htp->bev_flags;
+#ifndef EVHTP_DISABLE_EVTHR
+    if (connection->htp->thr_pool != NULL) {
+        bev_flags |= BEV_OPT_THREADSAFE;
+    }
+#endif
 
 #ifndef EVHTP_DISABLE_SSL
     if (connection->htp->ssl_ctx != NULL) {
@@ -3013,7 +3022,7 @@ htp__connection_accept_(struct event_base * evbase, evhtp_connection_t * connect
             connection->sock,
             connection->ssl,
             BUFFEREVENT_SSL_ACCEPTING,
-            connection->htp->bev_flags);
+            bev_flags);
         SSL_set_app_data(connection->ssl, connection);
         goto end;
     }
@@ -3022,7 +3031,7 @@ htp__connection_accept_(struct event_base * evbase, evhtp_connection_t * connect
 
     connection->bev = bufferevent_socket_new(evbase,
         connection->sock,
-        connection->htp->bev_flags);
+        bev_flags);
 
     log_debug("enter sock=%d\n", connection->sock);
 
