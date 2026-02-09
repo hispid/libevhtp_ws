@@ -84,28 +84,119 @@ static uint32_t __SHIFT[] = {
 
 static uint64_t ntoh64(const uint64_t input)
 {
+    /* Network byte order (big-endian) to host byte order conversion */
+    const uint8_t *data = (const uint8_t *)&input;
     uint64_t rval;
-    uint8_t *data = (uint8_t *)&rval;
 
-    data[0] = input >> 56;
-    data[1] = input >> 48;
-    data[2] = input >> 40;
-    data[3] = input >> 32;
-    data[4] = input >> 24;
-    data[5] = input >> 16;
-    data[6] = input >> 8;
-    data[7] = input >> 0;
+    rval = ((uint64_t)data[0] << 56) |
+           ((uint64_t)data[1] << 48) |
+           ((uint64_t)data[2] << 40) |
+           ((uint64_t)data[3] << 32) |
+           ((uint64_t)data[4] << 24) |
+           ((uint64_t)data[5] << 16) |
+           ((uint64_t)data[6] <<  8) |
+           ((uint64_t)data[7] <<  0);
 
     return rval;
 }
 
 void htp__request_free_(evhtp_request_t * request);
 
+/* Validate opcode according to RFC 6455 */
+static int ws_validate_opcode(evhtp_ws_parser * p, evhtp_request_t * req, uint8_t byte)
+{
+    /* RFC 6455: RSV bits must be 0 unless extension negotiated */
+    uint8_t rsv = (byte >> 4) & 0x7;
+    if (rsv != 0) {
+        fprintf(stderr,"Warning: websockets - invalid RSV bits %d (must be 0)\n", rsv);
+        return -1;
+    }
+
+    uint8_t opcode = byte & 0xF;
+    
+    /* Check for valid opcodes */
+    if(opcode != OP_CONT && opcode != OP_TEXT &&
+       opcode != OP_BIN  && opcode != OP_PING &&
+       opcode != OP_PONG && opcode != OP_CLOSE) {
+        fprintf(stderr,"Warning: websockets - invalid opcode %d\n", opcode);
+        return -1;
+    }
+
+    /* Check continuation frame consistency */
+    if(req->ws_cont && opcode != OP_CONT) {
+        fprintf(stderr,"Warning: websockets - expecting a continue frame but got opcode %d\n", opcode);
+        return -1;
+    }
+
+    if (!req->ws_cont && opcode == OP_CONT) {
+        fprintf(stderr,"Warning: websockets - not expecting a continue frame but got opcode OP_CONT\n");
+        return -1;
+    }
+
+    return 0;
+}
+
+/* Set payload length and validate control frame size */
+static int ws_set_payload_len(evhtp_ws_parser * p, uint64_t payload_len)
+{
+    p->frame.payload_len = payload_len;
+    p->content_len       = payload_len;
+    p->orig_content_len  = payload_len;
+
+    /* RFC 6455: Control frames must have payload <= 125 bytes */
+    if ((p->frame.hdr.opcode & 0x8) != 0 && payload_len > 125) {
+        fprintf(stderr,"Warning: websockets - control frame payload length %llu exceeds 125 bytes\n", 
+                (unsigned long long)payload_len);
+        return -1;
+    }
+
+    return 0;
+}
+
+/* Demask data in place */
+static void ws_demask_data(char * data, size_t len, uint32_t masking_key, uint64_t * content_idx)
+{
+    size_t z;
+    for (z = 0; z < len; z++) {
+        int           j = (*content_idx) % 4;
+        unsigned char xformed_oct;
+
+        xformed_oct = (masking_key & __MASK[j]) >> __SHIFT[j];
+        data[z]     = (unsigned char)data[z] ^ xformed_oct;
+
+        (*content_idx) += 1;
+    }
+}
+
+/* Process OP_CLOSE status code from payload */
+static int ws_process_close_status(evhtp_ws_parser * p, const char * data, size_t len, size_t * i)
+{
+    if (MIN_READ((const char *)(data + len) - &data[*i], 2) < 2) {
+        return 0; /* Need more data */
+    }
+
+    uint64_t index = p->content_idx;
+    uint32_t mkey  = p->frame.masking_key;
+    int      j1    = index % 4;
+    int      j2    = (index + 1) % 4;
+    int      m1    = (mkey & __MASK[j1]) >> __SHIFT[j1];
+    int      m2    = (mkey & __MASK[j2]) >> __SHIFT[j2];
+    char     buf[2];
+
+    buf[0]         = data[*i] ^ m1;
+    buf[1]         = data[*i + 1] ^ m2;
+    p->status_code = ntohs(*(uint16_t *)buf);
+    p->content_len -= 2;
+    p->content_idx += 2;
+    *i += 2;
+
+    return 1; /* Success */
+}
+
 ssize_t
 evhtp_ws_parser_run(evhtp_request_t *req, evhtp_ws_hooks * hooks,
                     const char * data, size_t len) {
     uint8_t      byte;
-    char         c;
     size_t       i=0;
     const char * p_start;
     const char * p_end;
@@ -119,7 +210,6 @@ evhtp_ws_parser_run(evhtp_request_t *req, evhtp_ws_hooks * hooks,
     //printf("\nparser run, len=%d state=%d\n", (int)len, (int)p->state);
     while(i<len)
     {
-        int res;
         byte = (uint8_t)data[i];
         switch (p->state) {
             case ws_s_start:
@@ -143,28 +233,7 @@ evhtp_ws_parser_run(evhtp_request_t *req, evhtp_ws_hooks * hooks,
 
                 //printf("parser run, opcode=%d ws_cont=%d\n", (int)p->frame.hdr.opcode, (int) req->ws_cont);
 
-                //sanity check 1
-                if(
-                    p->frame.hdr.opcode != OP_CONT && p->frame.hdr.opcode != OP_TEXT &&
-                    p->frame.hdr.opcode != OP_BIN  && p->frame.hdr.opcode != OP_PING &&
-                    p->frame.hdr.opcode != OP_PONG && p->frame.hdr.opcode != OP_CLOSE
-                )
-                {
-                    fprintf(stderr,"Warning: websockets - invalid opcode %d\n", p->frame.hdr.opcode);
-                    return -1;
-                }
-
-                //sanity check 2
-                if(req->ws_cont && p->frame.hdr.opcode !=OP_CONT)
-                {
-                    fprintf(stderr,"Warning: websockets - expecting a continue frame but got opcode %d\n", p->frame.hdr.opcode);
-                    return -1;
-                }
-
-                //sanity check 3
-                if (!req->ws_cont && p->frame.hdr.opcode == OP_CONT)
-                {
-                    fprintf(stderr,"Warning: websockets - not expecting a continue frame but got opcode OP_CONT\n");
+                if (ws_validate_opcode(p, req, byte) < 0) {
                     return -1;
                 }
 
@@ -179,9 +248,9 @@ evhtp_ws_parser_run(evhtp_request_t *req, evhtp_ws_hooks * hooks,
                 i++;
                 switch (EXTENDED_PAYLOAD_HDR_LEN(p->frame.hdr.len)) {
                     case 0:
-                        p->frame.payload_len = p->frame.hdr.len;
-                        p->content_len       = p->frame.payload_len;
-                        p->orig_content_len  = p->content_len;
+                        if (ws_set_payload_len(p, p->frame.hdr.len) < 0) {
+                            return -1;
+                        }
 
                         if (p->frame.hdr.mask == 1) {
                             p->state = ws_s_masking_key;
@@ -205,10 +274,11 @@ evhtp_ws_parser_run(evhtp_request_t *req, evhtp_ws_hooks * hooks,
                     return i;
                 }
 
-                p->frame.payload_len = ntohs(*(uint16_t *)&data[i]);
-                p->content_len       = p->frame.payload_len;
+                if (ws_set_payload_len(p, ntohs(*(uint16_t *)&data[i])) < 0) {
+                    return -1;
+                }
+
                 //printf("16 - content_len = %d\n",  (int)p->content_len);
-                p->orig_content_len  = p->content_len;
 
                 i += 2;
 
@@ -218,23 +288,21 @@ evhtp_ws_parser_run(evhtp_request_t *req, evhtp_ws_hooks * hooks,
                 }
 
                 p->state = ws_s_payload;
-
                 break;
             case ws_s_ext_payload_len_64:
                 if (MIN_READ((const char *)(data + len) - &data[i], 8) < 8) {
                     return i;
                 }
 
-
-                p->frame.payload_len = ntoh64(*(uint64_t *)&data[i]);
-                p->content_len       = p->frame.payload_len;
-                p->orig_content_len  = p->content_len;
+                if (ws_set_payload_len(p, ntoh64(*(uint64_t *)&data[i])) < 0) {
+                    return -1;
+                }
                 //printf("64 - content_len = %d\n",  (int)p->content_len);
 
                 i += 8;
 
                 if (p->frame.hdr.mask == 1) {
-                    p->state = ws_s_masking_key;;
+                    p->state = ws_s_masking_key;
                     break;
                 }
 
@@ -258,38 +326,10 @@ evhtp_ws_parser_run(evhtp_request_t *req, evhtp_ws_hooks * hooks,
 
                 /* op_close case */
                 if (p->frame.hdr.opcode == OP_CLOSE && p->status_code == 0) {
-                    uint64_t index;
-                    uint32_t mkey;
-                    int      j1;
-                    int      j2;
-                    int      m1;
-                    int      m2;
-                    char     buf[2];
-
-                    if (MIN_READ((const char *)(data + len) - &data[i], 2) < 2) {
-                        return i;
+                    int result = ws_process_close_status(p, data, len, &i);
+                    if (result == 0) {
+                        return i; /* Need more data */
                     }
-
-                    index           = p->content_idx;
-                    mkey            = p->frame.masking_key;
-
-                    /* our mod4 for the current index */
-                    j1              = index % 4;
-                    /* our mod4 for one past the index. */
-                    j2              = (index + 1) % 4;
-
-                    /* the masks we will be using to xor the buffers */
-                    m1              = (mkey & __MASK[j1]) >> __SHIFT[j1];
-                    m2              = (mkey & __MASK[j2]) >> __SHIFT[j2];
-
-                    buf[0]          = data[i] ^ m1;
-                    buf[1]          = data[i + 1] ^ m2;
-
-                    p->status_code  = ntohs(*(uint16_t *)buf);
-                    p->content_len -= 2;
-                    p->content_idx += 2;
-                    i += 2;
-
                     /* RFC states that there could be a message after the
                      * OP_CLOSE 2 byte header, so just drop down and attempt
                      * to parse it.
@@ -301,22 +341,12 @@ evhtp_ws_parser_run(evhtp_request_t *req, evhtp_ws_hooks * hooks,
                 p_end   = (const char *)(data + len);
                 to_read = MIN_READ(p_end - p_start, p->content_len);
                 if (to_read > 0) {
-                    int  z;
-                    //char buf[to_read];
-                    /* reuse existing buffer */
-                    char *buf = (char*)data;
-                    for (z = 0; z < to_read; z++) {
-                        int           j = p->content_idx % 4;
-                        unsigned char xformed_oct;
-
-                        xformed_oct     = (p->frame.masking_key & __MASK[j]) >> __SHIFT[j];
-                        buf[z]          = (unsigned char)p_start[z] ^ xformed_oct;
-
-                        p->content_idx += 1;
-                    }
+                    /* demask data in place */
+                    char *unmasked = (char *)p_start;
+                    ws_demask_data(unmasked, to_read, p->frame.masking_key, &p->content_idx);
 
                     if (hooks->on_msg_data) {
-                        if ((hooks->on_msg_data)(p, buf, to_read)) {
+                        if ((hooks->on_msg_data)(p, unmasked, to_read)) {
                             return -1;
                         }
                     }
