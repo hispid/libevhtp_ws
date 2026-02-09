@@ -2373,7 +2373,7 @@ static void ws_ping_cb(evutil_socket_t fd, short events, void* arg)
         event_del(p->pingev);
         event_free(p->pingev);
         p->pingev=NULL;
-        evhtp_ws_disconnect(req);
+        evhtp_ws_disconnect(evhtp_request_get_connection(req));
     }
 }
 

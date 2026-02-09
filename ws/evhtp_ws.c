@@ -508,11 +508,11 @@ evhtp_ws_parser_get_userdata(evhtp_ws_parser * p) {
     return p->usrdata;
 }
 /* send a text message to websocket client */
-EVHTP_EXPORT int evhtp_ws_send_text(evhtp_request_t * req, const char * data, size_t len)
+EVHTP_EXPORT int evhtp_ws_send_text(evhtp_connection_t * conn, const char * data, size_t len)
 {
     struct evbuffer * buf;
 
-    if (!req || !data) {
+    if (!conn || !data || !conn->bev) {
         return -1;
     }
 
@@ -528,18 +528,18 @@ EVHTP_EXPORT int evhtp_ws_send_text(evhtp_request_t * req, const char * data, si
         return -1;
     }
 
-    evhtp_send_reply_body(req, buf);
+    bufferevent_write_buffer(conn->bev, buf);
     evbuffer_free(buf);
 
     return 0;
 }
 
 /* send a binary message to websocket client */
-EVHTP_EXPORT int evhtp_ws_send_binary(evhtp_request_t * req, const void * data, size_t len)
+EVHTP_EXPORT int evhtp_ws_send_binary(evhtp_connection_t * conn, const void * data, size_t len)
 {
     struct evbuffer * buf;
 
-    if (!req || !data) {
+    if (!conn || !data || !conn->bev) {
         return -1;
     }
 
@@ -555,16 +555,18 @@ EVHTP_EXPORT int evhtp_ws_send_binary(evhtp_request_t * req, const void * data, 
         return -1;
     }
 
-    evhtp_send_reply_body(req, buf);
+    bufferevent_write_buffer(conn->bev, buf);
     evbuffer_free(buf);
 
     return 0;
 }
 
 /* set a flag to disconnect after we are done parsing */
-void evhtp_ws_disconnect(evhtp_request_t  * req)
+void evhtp_ws_disconnect(evhtp_connection_t * conn)
 {
-    req->disconnect=1;
+    if (conn && conn->request) {
+        conn->request->disconnect = 1;
+    }
 }
 
 /* the actual disconnect code, done at the appropriate time */

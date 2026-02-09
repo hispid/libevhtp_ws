@@ -4,6 +4,8 @@
 /* Forward declarations - include evhtp.h for full definitions */
 struct evhtp_request;
 typedef struct evhtp_request evhtp_request_t;
+struct evhtp_connection;
+typedef struct evhtp_connection evhtp_connection_t;
 struct evhtp_kvs;
 typedef struct evhtp_kvs evhtp_kvs_t;
 
@@ -105,27 +107,27 @@ EVHTP_EXPORT struct evbuffer * evhtp_ws_add_header(struct evbuffer *buf, uint8_t
 
 /**
  * @brief disconnect from websocket client
- * @param req websocket request
+ * @param conn websocket connection
  */
-EVHTP_EXPORT void evhtp_ws_disconnect(evhtp_request_t * req);
+EVHTP_EXPORT void evhtp_ws_disconnect(evhtp_connection_t * conn);
 
 /**
  * @brief send a text message to websocket client
- * @param req websocket request
+ * @param conn websocket connection
  * @param data text data to send
  * @param len length of data
  * @return 0 on success, -1 on error
  */
-EVHTP_EXPORT int evhtp_ws_send_text(evhtp_request_t * req, const char * data, size_t len);
+EVHTP_EXPORT int evhtp_ws_send_text(evhtp_connection_t * conn, const char * data, size_t len);
 
 /**
  * @brief send a binary message to websocket client
- * @param req websocket request
+ * @param conn websocket connection
  * @param data binary data to send
  * @param len length of data
  * @return 0 on success, -1 on error
  */
-EVHTP_EXPORT int evhtp_ws_send_binary(evhtp_request_t * req, const void * data, size_t len);
+EVHTP_EXPORT int evhtp_ws_send_binary(evhtp_connection_t * conn, const void * data, size_t len);
 
 #endif
 

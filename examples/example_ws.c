@@ -34,7 +34,7 @@ testcb(evhtp_request_t * req, void * a) {
     evhtp_send_reply_body(req, req->buffer_in);
 
     if(disconnect)
-        evhtp_ws_disconnect(req);
+        evhtp_ws_disconnect(evhtp_request_get_connection(req));
 }
 
 int
