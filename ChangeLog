@@ -4,6 +4,11 @@ v1.2.19
  o Add websocket message sending functions (evhtp_ws_send_text, evhtp_ws_send_binary) and improve opcode checks
  o Update FindOniguruma.cmake to use consistent package naming convention
  o Fix websocket parser to handle continuation frames correctly
+ o Refactor WebSocket disconnect and message sending functions to use evhtp_connection_t* instead of evhtp_request_t* for better safety and push messaging support
+ o Enhance connection acceptance logic to support thread safety by automatically adding BEV_OPT_THREADSAFE when threads are enabled
+ o Implement WebSocket connection close/error handling and cleanup
+ o Enhance WebSocket parser with validation and payload handling improvements
+ o Add forward declaration for websocket disconnect function and update header files
 
 v1.2.18
  o Add htp__evbuffer_add_iovec_ helper for libevent < 2.1 (8991567 Nathan French)
